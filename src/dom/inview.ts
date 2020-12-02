@@ -7,7 +7,7 @@ import { mathf } from '../mathf/mathf';
 import { dom } from '../dom/dom';
 
 
-const InviewClassNames = {
+const InviewDefaultClassNames: Object = {
     READY: 'ready',
     IN: 'in',
     IN_ONCE: 'in-once',
@@ -39,6 +39,13 @@ export interface InviewConfig {
      * the bottom of the screen and 1 is the top of the screen.  Defaults to 0.
      */
     viewportOffset?: number,
+
+
+    /**
+     * Inview ClassNames. An optional object defining the inview class names
+     * that gets merge with InviewClassNames.
+     */
+    inviewClassNames?: Object,
 
     /**
      * Optionally pass child selectors to add inview states to children.
@@ -95,7 +102,11 @@ export interface InviewConfig {
  *           elementBaseline: 0,
  *           viewportOffset: 0.2,
  *           waitForOutOfViewToRefireInview: false,
- *           downOnlyMode: false
+ *           downOnlyMode: false,
+ *           // Optionally override default class names.
+ *           inviewClassNames: {
+ *             IN: 'mymodule--in'
+ *           }
  *       });
  * ```
  *
@@ -237,6 +248,12 @@ export class Inview {
      */
     private targetElements: Array<HTMLElement>;
 
+
+    /**
+     * A list of inview classnames.
+     */
+    private inviewClassNames: Object;
+
     constructor(config: InviewConfig) {
         this.config = Object.assign(
             {
@@ -247,6 +264,16 @@ export class Inview {
             },
             config
         );
+
+
+        // Merge the inview class names.
+        this.inviewClassNames = Object.assign({}, InviewDefaultClassNames);
+        if (config.inviewClassNames) {
+          this.inviewClassNames = Object.assign(this.inviewClassNames,
+                config.inviewClassNames);
+        }
+
+
         this.raf = new Raf(this.onRaf.bind(this));
         this.readWrite = new Raf()
         this.scrollY = window.scrollY;
@@ -287,7 +314,7 @@ export class Inview {
 
         this.targetElements.forEach((target: HTMLElement, i: number) => {
             this.readWrite.write(() => {
-                target.classList.add(InviewClassNames.READY)
+                target.classList.add(this.inviewClassNames['READY'])
             })
         })
 
@@ -425,22 +452,22 @@ export class Inview {
         }
         this.readWrite.write(() => {
             this.targetElements.forEach((el) => {
-                el.classList.remove(InviewClassNames.OUT);
-                el.classList.add(InviewClassNames.IN);
+                el.classList.remove(this.inviewClassNames['OUT']);
+                el.classList.add(this.inviewClassNames['IN']);
 
                 if (!this.inOnce) {
-                    el.classList.add(InviewClassNames.IN_ONCE);
+                    el.classList.add(this.inviewClassNames['IN_ONCE']);
                     this.inOnce = true;
 
                     if(window.scrollY == 0) {
-                      el.classList.add(InviewClassNames.IN_FOLD);
+                      el.classList.add(this.inviewClassNames['IN_FOLD']);
                     }
                 }
 
 
-                el.classList.remove(InviewClassNames.UP);
-                el.classList.remove(InviewClassNames.DOWN);
-                el.classList.add(this.scrollDirection == -1 ? InviewClassNames.UP : InviewClassNames.DOWN);
+                el.classList.remove(this.inviewClassNames['UP']);
+                el.classList.remove(this.inviewClassNames['DOWN']);
+                el.classList.add(this.scrollDirection == -1 ? this.inviewClassNames['UP'] : this.inviewClassNames['DOWN']);
                 this.isInState = true;
             })
 
@@ -454,11 +481,11 @@ export class Inview {
         }
         this.readWrite.write(() => {
             this.targetElements.forEach((el) => {
-                el.classList.add(InviewClassNames.OUT);
-                el.classList.remove(InviewClassNames.IN);
-                el.classList.remove(InviewClassNames.UP);
-                el.classList.remove(InviewClassNames.DOWN);
-                el.classList.add(this.scrollDirection == -1 ? InviewClassNames.UP : InviewClassNames.DOWN);
+                el.classList.add(this.inviewClassNames['OUT']);
+                el.classList.remove(this.inviewClassNames['IN']);
+                el.classList.remove(this.inviewClassNames['UP']);
+                el.classList.remove(this.inviewClassNames['DOWN']);
+                el.classList.add(this.scrollDirection == -1 ? this.inviewClassNames['UP'] : this.inviewClassNames['DOWN']);
                 this.isInState = false;
             })
         });
