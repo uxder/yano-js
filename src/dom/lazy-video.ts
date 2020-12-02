@@ -257,8 +257,8 @@ export class LazyVideoManager {
 
     private lazyVideos: Array<LazyVideo> = [];
 
-    constructor() {
-        const lazyVideoElements: Array<HTMLElement> = Array.from(document.querySelectorAll('[lazy-video]'));
+    constructor(rootElement: HTMLElement) {
+        const lazyVideoElements: Array<HTMLElement> = Array.from(rootElement.querySelectorAll('[lazy-video]'));
         lazyVideoElements.forEach((element: HTMLElement) => {
             this.lazyVideos.push(
                 new LazyVideo(element)
