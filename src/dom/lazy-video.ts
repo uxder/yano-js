@@ -8,6 +8,7 @@ import { elementVisibility, ElementVisibilityObject } from '../dom/element-visib
 
 export const LazyVideoEvents = {
     LOAD_START: 'LOAD_START',
+    LOAD_LOADED: 'LOAD_LOADED',
 }
 
 /**
@@ -15,7 +16,7 @@ export const LazyVideoEvents = {
  * This is a port of directive-lazy-video to a native implementation.
  *
  *
- * Usage Example:
+ * Basic Usage Example:
  *
  *
  * ```
@@ -58,6 +59,20 @@ export const LazyVideoEvents = {
  * <video>
  * ```
  *
+ *
+ * # Autoplay
+ * By default, lazyvideo WILL not play your video but only load it.
+ * You should use the events fired by lazyvideo and handle the timing of playing.
+ *
+ * You can alternately, add `lazy-video-play-on-inview` to autoplay the video
+ * when it comes into the viewport.
+ *
+ * ```
+ * <video>
+ *   <source type="video/mp4" lazy-video="{{url}}" lazy-video-play-on-inview></source>
+ * <video>
+ * ```
+ *
  * # Forward Scalar
  * Adjust the forward scalar to higher values to load videos more aggressively.
  *   <source lazy-video="{{url}}" lazy-video-forward-scalar="3"></source>
@@ -89,14 +104,18 @@ export class LazyVideo {
     /**
      * The parent of the source element which  is the <video> element.
      */
-    private parent: HTMLElement;
+    private video: HTMLVideoElement;
 
     /**
      * The url of the video to load.
      */
     private url: string;
     private setComplete: boolean;
+    // Ev used to trigger the load of the video.
     private ev: ElementVisibilityObject;
+
+    // Ev used to play or pause the video.
+    private inviewEv: ElementVisibilityObject;
     private watcher: DomWatcher;
 
     // The amount of rootMargin offset to apply to lazyimage.
@@ -107,10 +126,15 @@ export class LazyVideo {
     // the current fold.
     private forwardLoadScalar: number;
 
+    /**
+     * Whether to play / stop the video on inview.
+     */
+    private playOnInview: boolean = false;
+
     constructor(el: HTMLElement) {
 
         this.el = el;
-        this.parent = this.el.parentElement;
+        this.video = this.el.parentElement as HTMLVideoElement;
 
         this.watcher = new DomWatcher();
         this.watcher.add({
@@ -133,9 +157,18 @@ export class LazyVideo {
          */
         this.setComplete = false;
 
-        this.ev = elementVisibility.inview(this.parent, {
+        /**
+         * Check whether we should play this on inview.
+         */
+        this.playOnInview = this.el.hasAttribute('lazy-video-play-on-inview');
+
+        this.ev = elementVisibility.inview(this.video, {
             rootMargin: window.innerHeight * this.forwardLoadScalar + 'px'
         }, () => {
+            this.paint();
+        });
+
+        this.inviewEv = elementVisibility.inview(this.video, {}, () => {
             this.paint();
         });
 
@@ -158,15 +191,45 @@ export class LazyVideo {
             this.setComplete = true;
             this.el.setAttribute('src', this.url);
 
+            dom.whenVideosLoaded([this.video]).then(() => {
+                // Fire an event.
+                dom.event(this.video, LazyVideoEvents.LOAD_LOADED, {});
+                // Play the video if we opted to play on inview.
+                this.playVideo && this.playVideo();
+            })
+
             // Tell the parent element (video) to load.
-            this.parent['load']();
+            this.video.load();
 
             // Fire an event.
-            dom.event(this.parent, LazyVideoEvents.LOAD_START, {});
+            dom.event(this.video, LazyVideoEvents.LOAD_START, {});
+
 
             // Once it's loaded, dispose of this module.
             this.dispose();
         }
+
+        // If we have already loaded this, then reset the video on outview,
+        // replay on inview.
+        if (this.setComplete && this.playOnInview) {
+            if (!this.isPainted() && !this.inviewEv.state().inview) {
+                this.video.currentTime = 0;
+                this.video.pause();
+
+            } else {
+                this.playVideo();
+            }
+        }
+
+    }
+
+
+    private playVideo() {
+        if (!dom.testVideoIsPlaying(this.video)) {
+            let playPromise = this.video.play();
+            playPromise.then(() => { }).catch((e) => { });
+        }
+
     }
 
 
@@ -176,7 +239,7 @@ export class LazyVideo {
     * of hiding the element will return true.
     */
     isPainted() {
-        return !dom.isDisplayNoneWithAncestors(this.parent) && this.ev.state().inview;
+        return !dom.isDisplayNoneWithAncestors(this.video) && this.ev.state().inview;
     }
 
 
@@ -196,16 +259,16 @@ export class LazyVideoManager {
 
     constructor() {
         const lazyVideoElements: Array<HTMLElement> = Array.from(document.querySelectorAll('[lazy-video]'));
-        lazyVideoElements.forEach((element:HTMLElement)=> {
+        lazyVideoElements.forEach((element: HTMLElement) => {
             this.lazyVideos.push(
-              new LazyVideo(element)
+                new LazyVideo(element)
             )
         })
     }
 
 
     dispose() {
-        this.lazyVideos && this.lazyVideos.forEach((lazyVideo)=> {
+        this.lazyVideos && this.lazyVideos.forEach((lazyVideo) => {
             lazyVideo.dispose();
         })
     }
