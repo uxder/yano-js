@@ -223,7 +223,8 @@ export class DomWatcher {
             config.remover = () => {
                 config.element.removeEventListener(
                     config.on,
-                    listener
+                    listener,
+                    config.eventOptions || {}
                 );
             }
         }
